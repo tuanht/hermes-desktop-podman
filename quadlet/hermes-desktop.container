@@ -1,0 +1,38 @@
+# hermes-desktop.container
+# Rootless Podman Quadlet. Installed to ~/.config/containers/systemd/ by install.sh.
+# Generated unit: hermes-desktop.service (starts at boot via linger, no login needed).
+#
+# Access (loopback only):
+#   NoVNC     http://127.0.0.1:6080/vnc.html
+#   VNC       127.0.0.1:5901
+#   RDP       127.0.0.1:3390
+#   Dashboard http://127.0.0.1:9119   (login: HERMES_USER / HERMES_PASSWORD)
+
+[Unit]
+Description=Hermes Agent Desktop (XFCE + headed CDP browser)
+Documentation=https://hub.docker.com/r/neoplanetz/hermes-desktop-docker
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=hermes-desktop
+Image=localhost/hermes-desktop-custom:latest
+PodmanArgs=--init
+ShmSize=2g
+
+Environment=HERMES_USER=hermes
+EnvironmentFile=%h/.config/hermes-desktop/hermes.env
+
+PublishPort=127.0.0.1:6080:6080
+PublishPort=127.0.0.1:5901:5901
+PublishPort=127.0.0.1:3390:3389
+PublishPort=127.0.0.1:9119:9119
+
+Volume=hermes-home:/home/hermes:Z
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

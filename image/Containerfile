@@ -1,0 +1,60 @@
+# Derived image: neoplanetz/hermes-desktop-docker plus three runtime fixes that
+# the base image lacks. Rebuild after pulling a new base:
+#   podman build -t localhost/hermes-desktop-custom:latest -f image/Containerfile image/
+FROM docker.io/neoplanetz/hermes-desktop-docker:latest
+
+# 1. Telegram platform: the lazy-install cannot write to the root-owned venv and has no pip.
+RUN /usr/local/lib/hermes-agent/venv/bin/python -m ensurepip --upgrade \
+ && /usr/local/lib/hermes-agent/venv/bin/python -m pip install --no-cache-dir "python-telegram-bot[webhooks]==22.6"
+
+# 2. Node/npm: the base links these into /root/.hermes, which the hermes user cannot access.
+RUN cp -a /root/.hermes/node /opt/node \
+ && ln -sfn /opt/node/bin/node /usr/local/bin/node \
+ && ln -sfn /opt/node/bin/npm /usr/local/bin/npm
+
+# 3. Dashboard Chat: build the TUI bundle as root so the hermes user never runs npm install.
+RUN cd /usr/local/lib/hermes-agent \
+ && npm install --workspace ui-tui --no-fund --silent \
+ && cd ui-tui && npm run build
+ENV HERMES_TUI_DIR=/usr/local/lib/hermes-agent/ui-tui
+# The entrypoint launches the dashboard via `su - hermes`, which drops image ENV;
+# export it from a login profile too so the dashboard (Chat tab) sees it.
+RUN echo 'export HERMES_TUI_DIR=/usr/local/lib/hermes-agent/ui-tui' > /etc/profile.d/hermes-tui.sh
+
+# 4. Messaging gateway (Telegram): the base entrypoint never starts it. Launch it as the
+#    desktop user before the NoVNC step. It is non-fatal: the entrypoint only waits on the dashboard and websockify.
+RUN python3 - <<'PY'
+p = "/entrypoint.sh"
+s = open(p).read()
+marker = "# NoVNC\n"
+hook = (
+    "# Hermes messaging gateway (Telegram etc.): non-fatal, runs as the desktop user.\n"
+    "su - \"$USER\" -c 'nohup hermes gateway run >> ~/.hermes/logs/gateway.boot.log 2>&1' &\n"
+)
+assert s.count(marker) == 1, "entrypoint marker not found"
+open(p, "w").write(s.replace(marker, hook + marker))
+PY
+
+# 5. browser_vision: the native-vision result gave the model no file path, so it invented one
+#    (e.g. /home/workdir/attachments/image.png) for MEDIA:. Put the real path in the text part too.
+RUN python3 - <<'PY'
+p = "/usr/local/lib/hermes-agent/tools/browser_tool.py"
+s = open(p).read()
+anchor = (
+    "            native_result[\"text_summary\"] = (\n"
+    "                f\"{native_result.get('text_summary', '')} \"\n"
+    "                f\"Screenshot path: {screenshot_path}\"\n"
+    "            ).strip()\n"
+)
+assert s.count(anchor) == 1, "browser_vision anchor not found"
+patch = anchor + (
+    "            for _part in native_result.get(\"content\", []):\n"
+    "                if _part.get(\"type\") == \"text\":\n"
+    "                    _part[\"text\"] += (\n"
+    "                        f\"\\nScreenshot saved at: {screenshot_path} \"\n"
+    "                        f\"(to send it to the user, reply with MEDIA:{screenshot_path})\"\n"
+    "                    )\n"
+    "                    break\n"
+)
+open(p, "w").write(s.replace(anchor, patch))
+PY
