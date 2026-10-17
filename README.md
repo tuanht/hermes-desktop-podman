@@ -11,6 +11,7 @@ that start at boot without a login. One container runs the gateway and the dashb
 - `quadlet/hermes.env.example` — secret template
 - `quadlet/hermes-sandbox.{container,volume}`, `quadlet/hermes.network` — Ubuntu dev sandbox for the `coder-remote` profile, and the shared network
 - `sandbox/` — Containerfile (Ubuntu 24.04: sshd, git, Claude Code, Node 22, Python, Go, build tools)
+- `skills/<name>/SKILL.md` — project skills, installed into the `coder-remote` profile only (e.g. `tuanht-blog`)
 - `install.sh` — installs units, creates the secret file once, runs first-time setup, starts the service
 
 ## Install
@@ -58,6 +59,32 @@ network (no published ports), and creates the Hermes profile `coder-remote` with
 podman exec -it -u hermes -e HOME=/opt/data -e HERMES_HOME=/opt/data hermes /opt/hermes/.venv/bin/hermes -p coder-remote chat
 podman exec -it -u dev hermes-sandbox claude     # one-time Claude Code login (kept in hermes-sandbox-home)
 podman exec -it -u dev hermes-sandbox bash       # shell in the sandbox
+```
+
+### GitHub access from the sandbox
+
+The sandbox pushes with its own key, kept in the `hermes-sandbox-home` volume (not created by `install.sh`).
+Create it once (skips if present), then print the public key:
+
+```bash
+podman exec -u dev hermes-sandbox bash -c '[ -f ~/.ssh/id_ed25519_github ] || ssh-keygen -q -t ed25519 -N "" -C hermes-sandbox -f ~/.ssh/id_ed25519_github'
+podman exec -u dev hermes-sandbox cat /home/dev/.ssh/id_ed25519_github.pub
+```
+
+Add it on GitHub as a **deploy key with write access** on each repo (Settings → Deploy keys), or as an
+account SSH key (broader access). Then check with `podman exec -u dev hermes-sandbox ssh -T git@github.com`.
+One-time sandbox config: `~/.ssh/config` with `Host github.com`, `IdentityFile ~/.ssh/id_ed25519_github`,
+`IdentitiesOnly yes`; `ssh-keyscan github.com >> ~/.ssh/known_hosts`; and `git config --global user.name/user.email`.
+
+### Skills and Kanban tasks
+
+`skills/tuanht-blog/SKILL.md` holds the blog workflow (clone/pull, branch, verify, push). `install.sh`
+copies every `skills/*/SKILL.md` into `/opt/data/profiles/coder-remote/skills/software-development/`.
+Edit the file in this repo and rerun `./install.sh` (or `/reload-skills`). Tasks then stay short:
+
+```bash
+podman exec -u hermes -e HOME=/opt/data -e HERMES_HOME=/opt/data hermes /opt/hermes/.venv/bin/hermes \
+  kanban create "Clone tuanht-blog and report its stack" --skill tuanht-blog
 ```
 
 Hermes provider keys are never forwarded to the remote host; Claude Code authenticates inside the sandbox.

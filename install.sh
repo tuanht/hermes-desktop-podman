@@ -79,5 +79,12 @@ TERMINAL_SSH_USER=dev
 TERMINAL_SSH_PORT=22
 TERMINAL_SSH_KEY=$PROFILE_DIR/ssh/id_ed25519
 ENVEOF
+# Project skills (skills/<name>/SKILL.md) go into the coder-remote profile only.
+for f in "$(dirname "$SRC_DIR")"/skills/*/SKILL.md; do
+    name="$(basename "$(dirname "$f")")"
+    dest="$PROFILE_DIR/skills/software-development/$name"
+    podman exec -u hermes hermes mkdir -p "$dest"
+    podman exec -i -u hermes hermes sh -c "cat > $dest/SKILL.md" < "$f"
+done
 "${HX[@]}" -p coder-remote config set terminal.backend ssh
 "${HX[@]}" -p coder-remote config set terminal.cwd /home/dev/work
