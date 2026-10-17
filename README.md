@@ -11,7 +11,7 @@ that start at boot without a login. One container runs the gateway and the dashb
 - `quadlet/hermes.env.example` — secret template
 - `quadlet/hermes-sandbox.{container,volume}`, `quadlet/hermes.network` — Ubuntu dev sandbox for the `coder-remote` profile, and the shared network
 - `sandbox/` — Containerfile (Ubuntu 24.04: sshd, git, Claude Code, Node 22, Python, Go, build tools)
-- `skills/<profile>/<name>/SKILL.md` — project skills, installed into that profile only (`coder-remote/tuanht-blog`, `coder-reviewer/blog-review`)
+- `skills/<profile>/<name>/SKILL.md` — project skills, installed into that profile only (`coder-remote/tuanht-blog`, `coder-reviewer/pr-review`)
 - `install.sh` — installs units, creates the secret file once, runs first-time setup, starts the service
 
 ## Install
@@ -109,18 +109,18 @@ The token is readable by anything running as `dev` in the sandbox, which is why 
 
 ### Reviewer profile (`coder-reviewer`)
 
-Same SSH sandbox and key as `coder-remote`, own skill `blog-review`. Flow: a ticket lands in the Kanban
+Same SSH sandbox and key as `coder-remote`, own skill `pr-review`. Flow: a ticket lands in the Kanban
 **review** column assigned to `coder-reviewer` (`kanban.review_dispatch: true`); the gateway dispatcher
 starts the worker, which runs a read-only `claude -p` review in the sandbox, comments on the ticket and the PR
 (`gh pr comment`, never approve/merge), then ends with `kanban_complete` or `kanban_request_changes`.
-The mechanics live in `sandbox/blog-review` (installed as `/usr/local/bin/blog-review` in the image): it clones or
+The mechanics live in `sandbox/pr-review` (installed as `/usr/local/bin/pr-review` in the image): it clones or
 updates the repo, checks out the PR head, runs a read-only `claude -p` (stdin prompt, plan mode, git-read allow-list),
 writes a report to `~/work/.reviews/`, optionally posts a PR comment, and ends with `VERDICT=`, `REPORT=`, `POSTED=`, `DONE`.
 Build/lint is opt-in (`--build`) because PR install hooks would run next to the sandbox's GitHub credentials.
 Try it by hand (any readable repo; `--no-post` skips the comment):
 
 ```bash
-podman exec -u dev hermes-sandbox blog-review https://github.com/OWNER/REPO/pull/N --model sonnet --no-post
+podman exec -u dev hermes-sandbox pr-review https://github.com/OWNER/REPO/pull/N --model sonnet --no-post
 ```
 
 `terminal.timeout` is 600 s for both profiles (the cloned default was 60 s); the skill still runs the script in the
@@ -140,7 +140,7 @@ pins the *Hermes worker* (the coordinator). The *Claude Code* review model defau
 default profile; change it with `hermes -p coder-reviewer config set model.default <model>`.
 
 ```bash
-hermes kanban create "Review PR 12" --assignee coder-reviewer --skill blog-review --body $'PR: https://github.com/tuanht/tuanht-blog/pull/12\nclaude-model: opus\nfocus: accessibility'
+hermes kanban create "Review PR 12" --assignee coder-reviewer --skill pr-review --body $'PR: https://github.com/tuanht/tuanht-blog/pull/12\nclaude-model: opus\nfocus: accessibility'
 ```
 
 ### Skills and Kanban tasks

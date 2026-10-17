@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# blog-review: read-only Claude Code review of a GitHub pull request, run inside the sandbox.
-# Usage: blog-review <pr-url | owner/repo#N | N> [--model ALIAS] [--focus TEXT] [--no-post] [--build]
+# pr-review: read-only Claude Code review of a GitHub pull request, run inside the sandbox.
+# Usage: pr-review <pr-url | owner/repo#N | N> [--model ALIAS] [--focus TEXT] [--no-post] [--build]
 #   N alone means tuanht/tuanht-blog. Default model: sonnet. Posting a PR comment is on unless --no-post.
 #   --build runs the repo's install/build/lint scripts; OFF by default because a PR can ship malicious
 #   install hooks and this sandbox holds a GitHub key and token.
@@ -20,7 +20,7 @@ while (($#)); do
         *) PR="$1"; shift ;;
     esac
 done
-[[ -n "$PR" ]] || { echo "usage: blog-review <pr-url|owner/repo#N|N> [options]" >&2; exit 2; }
+[[ -n "$PR" ]] || { echo "usage: pr-review <pr-url|owner/repo#N|N> [options]" >&2; exit 2; }
 
 if   [[ "$PR" =~ github\.com/([^/]+/[^/]+)/pull/([0-9]+) ]]; then REPO="${BASH_REMATCH[1]}" NUM="${BASH_REMATCH[2]}"
 elif [[ "$PR" =~ ^([^/#]+/[^/#]+)#([0-9]+)$ ]];               then REPO="${BASH_REMATCH[1]}" NUM="${BASH_REMATCH[2]}"
@@ -32,7 +32,7 @@ mkdir -p "$OUT"
 STAMP="$(date +%Y%m%d-%H%M%S)" BASE_NAME="${REPO//\//_}-pr$NUM-$STAMP"
 REPORT="$OUT/$BASE_NAME.md" LOG="$OUT/$BASE_NAME.log"
 exec > >(tee -a "$LOG") 2>&1
-echo "== blog-review $REPO#$NUM model=$MODEL focus=$FOCUS post=$POST build=$BUILD"
+echo "== pr-review $REPO#$NUM model=$MODEL focus=$FOCUS post=$POST build=$BUILD"
 
 fail() { echo "ERROR: $*"; echo "VERDICT=UNKNOWN"; echo "POSTED=no"; echo "DONE"; exit 1; }
 

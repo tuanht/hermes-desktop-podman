@@ -1,15 +1,15 @@
 ---
-name: blog-review
-description: "Use for Kanban review tasks on tuanht-blog pull requests: run Claude Code review in the SSH sandbox, post findings to the PR and ticket, then approve or request changes."
+name: pr-review
+description: "Use for Kanban review tasks on a GitHub pull request (any repo the sandbox can read; bare PR numbers mean tuanht/tuanht-blog): run a Claude Code review in the SSH sandbox, post findings to the PR and ticket, then complete or request changes."
 version: 1.0.0
 platforms: [linux]
 metadata:
   hermes:
-    tags: [review, git, blog, sandbox, claude-code]
+    tags: [review, git, sandbox, claude-code]
     requires_toolsets: [terminal]
 ---
 
-# blog-review
+# pr-review
 
 Review a tuanht-blog pull request by delegating the reading to Claude Code inside `hermes-sandbox`.
 This profile's terminal backend is SSH, so every terminal command runs there as user `dev`.
@@ -26,9 +26,9 @@ A task in the Kanban `review` column (or assigned to this profile) that points a
 - Optional `no-post: true` line to skip the PR comment, `build: true` to run the repo's build/lint (see Pitfalls).
 
 ## Procedure
-All the mechanics live in the sandbox script `blog-review`, so do not reimplement them by hand.
+All the mechanics live in the sandbox script `pr-review`, so do not reimplement them by hand.
 1. Start it in the background (a review takes minutes, longer than one terminal call):
-   `mkdir -p ~/work/.reviews && nohup blog-review "<PR>" --model <alias> --focus "<text>" [--no-post] [--build] > ~/work/.reviews/run-$$.out 2>&1 &`
+   `mkdir -p ~/work/.reviews && nohup pr-review "<PR>" --model <alias> --focus "<text>" [--no-post] [--build] > ~/work/.reviews/run-$$.out 2>&1 &`
    Note the output file path.
 2. Poll with `tail -n 5 <file>` every 20-30 s (use `heartbeat` if the tool exists) until a line `DONE` appears. Give up after ~25 min.
 3. Read the final lines: `VERDICT=`, `REPORT=<path>`, `POSTED=yes|no`. Read the report with `cat <REPORT>`.
