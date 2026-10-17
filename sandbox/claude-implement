@@ -5,14 +5,19 @@
 #   --base BRANCH    base branch (default: the repo's default branch)
 #   --title TEXT     commit/PR title (default: first line of the spec)
 #   --no-push        stop after committing locally (no push, no PR)
+#   --spec-file -    read the spec from stdin (use with a heredoc; saved under ~/work/.tasks/)
+#   --background     detach: print LOG=<path> and return at once; poll the log for a final DONE line
 #   --build          allow Claude to run `npm ci` and `npm run ...` (trusted repos only; default OFF)
-# Claude Code only edits files; this script commits, pushes and opens the PR, so Claude has NO git-write or gh access. This script pushes the branch
-# and opens the PR, so credentials never reach the model.
-# Output: log/report under ~/work/.tasks/. Last lines: BRANCH= / COMMITS= / PR_URL= / DONE (or ERROR:).
-# Start it in the background (nohup ... &) and poll with `tail`.
+# Claude Code only edits files; this script commits, pushes and opens the PR, so the model has NO git-write or gh access.
+# Output: log/report under ~/work/.tasks/. Last lines: BRANCH= / COMMITS= / PR_URL= (or COMPARE_URL=) / DONE, or ERROR: / DONE.
+# Typical call from an agent (one plain command, no nohup, no &, no redirects):
+#   claude-implement tuanht/tuanht-blog --branch task/x --model sonnet --title "T" --spec-file - --background <<'SPEC'
+#   ...ticket text, verbatim...
+#   SPEC
 set -uo pipefail
 
-MODEL=sonnet BASE="" TITLE="" PUSH=1 BUILD=0 BRANCH="" SPEC="" REPO_ARG=""
+MODEL=sonnet BASE="" TITLE="" PUSH=1 BUILD=0 BG=0 BRANCH="" SPEC="" REPO_ARG=""
+ARGS=("$@")
 while (($#)); do
     case "$1" in
         --branch) BRANCH="$2"; shift 2 ;;
@@ -22,19 +27,34 @@ while (($#)); do
         --title) TITLE="$2"; shift 2 ;;
         --no-push) PUSH=0; shift ;;
         --build) BUILD=1; shift ;;
-        -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+        --background) BG=1; shift ;;
+        -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
         *) REPO_ARG="$1"; shift ;;
     esac
 done
-[[ -n "$REPO_ARG" && -n "$BRANCH" && -f "$SPEC" ]] || { echo "usage: claude-implement <repo> --branch B --spec-file F [options]" >&2; exit 2; }
+SPEC="${SPEC/#\~/$HOME}"   # tolerate a literal ~ that the caller's shell did not expand
+[[ -n "$REPO_ARG" && -n "$BRANCH" && ( "$SPEC" == - || -f "$SPEC" ) ]] || { echo "usage: claude-implement <repo> --branch B --spec-file F [options]" >&2; exit 2; }
 [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "bad branch name" >&2; exit 2; }
 [[ "$REPO_ARG" =~ ^[0-9]*$ ]] && REPO="tuanht/tuanht-blog" || REPO="$REPO_ARG"
 [[ "$REPO_ARG" == "" ]] && REPO="tuanht/tuanht-blog"
 
 DIR="$HOME/work/${REPO#*/}" OUT="$HOME/work/.tasks"
 mkdir -p "$OUT"
-STAMP="$(date +%Y%m%d-%H%M%S)" ID="${REPO//\//_}-${BRANCH//\//_}-$STAMP"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+ID="${CLAUDE_IMPLEMENT_ID:-${REPO//\//_}-${BRANCH//\//_}-$STAMP}"
 LOG="$OUT/$ID.log" SUMMARY="$OUT/$ID.summary.md"
+if [[ "$SPEC" == - ]]; then SPEC="$OUT/$ID.spec.md"; cat > "$SPEC"; [[ -s "$SPEC" ]] || { echo "empty spec on stdin" >&2; exit 2; }; fi
+if ((BG)) && [[ -z "${CLAUDE_IMPLEMENT_ID:-}" ]]; then
+    # Detach a child that runs the same command (spec already saved to a file) and return immediately.
+    CHILD=(); skip=0
+    for a in "${ARGS[@]}"; do
+        if ((skip)); then skip=0; continue; fi
+        case "$a" in --background) ;; --spec-file) CHILD+=("$a" "$SPEC"); skip=1 ;; *) CHILD+=("$a") ;; esac
+    done
+    CLAUDE_IMPLEMENT_ID="$ID" setsid nohup "$0" "${CHILD[@]}" >/dev/null 2>&1 < /dev/null &
+    echo "STARTED=yes"; echo "LOG=$LOG"; echo "POLL: tail -n 5 $LOG   (finished when a line DONE appears)"
+    exit 0
+fi
 exec > >(tee -a "$LOG") 2>&1
 echo "== claude-implement $REPO branch=$BRANCH model=$MODEL push=$PUSH build=$BUILD"
 fail() { echo "ERROR: $*"; echo "DONE"; exit 1; }

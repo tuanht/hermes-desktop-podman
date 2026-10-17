@@ -1,7 +1,7 @@
 ---
 name: tuanht-blog
 description: "Use for any code-change task on the tuanht-blog repo: delegate the coding to Claude Code in the SSH sandbox via claude-implement, then hand the PR to code-reviewer."
-version: 2.0.0
+version: 2.1.0
 platforms: [linux]
 metadata:
   hermes:
@@ -27,23 +27,33 @@ Any task that changes the tuanht-blog repository (`git@github.com:tuanht/tuanht-
 
 ## Procedure
 1. Check auth: `ssh -T git@github.com`. Without a greeting, `kanban_block` (kind `capability`) and stop.
-2. Write the spec to a file in the sandbox: `mkdir -p ~/work/.tasks` then write the full ticket body (goal,
-   requirements, out of scope) to `~/work/.tasks/<task-id>.spec.md`. Use a heredoc via the terminal tool.
-3. Start the implementer in the background (it takes minutes):
-   `nohup claude-implement tuanht/tuanht-blog --branch task/<slug> --spec-file ~/work/.tasks/<task-id>.spec.md --model <alias> --title "<ticket title>" [--build] > ~/work/.tasks/<task-id>.out 2>&1 &`
-4. Poll `tail -n 5 ~/work/.tasks/<task-id>.out` every 20-30 s (call `heartbeat` if available) until a line `DONE`. Give up after ~40 min.
-5. Read the final lines:
-   - `ERROR:` line -> `kanban_block` with that error (kind `needs_input` for a dirty checkout or existing branch, `capability` for auth/push problems).
-   - `PR_URL=...` -> success. Else if `COMPARE_URL=...` was printed, `gh pr create` failed: report that URL for a manual PR.
-6. Read the generated PR description (`SUMMARY=<path>`) and check it matches the spec. If it clearly does not, say so in the hand-off; do not fix the code yourself.
-7. Hand off for review. Do NOT complete the task and do NOT merge:
-   `kanban_request_review(summary="<PR URL + files changed + what Claude reported as verified>", reviewer="code-reviewer")`.
+2. Launch. Run exactly ONE terminal command, with the ticket body pasted **verbatim** inside the heredoc (do not
+   summarise, reword or add requirements). No `nohup`, no `&`, no redirects, no quotes around the whole command:
+
+   ```bash
+   claude-implement tuanht/tuanht-blog --branch task/<slug> --model <alias> --title "<ticket title>" --spec-file - --background <<'SPEC'
+   <ticket body, verbatim>
+   SPEC
+   ```
+
+   Add `--build` only if the ticket has `build: true`. It prints `STARTED=yes` and `LOG=<path>`. If it prints anything
+   else, or an error, run `kanban_block` with that output; do not improvise a different launch.
+3. Poll: `tail -n 8 <LOG path>` every 20-30 s (call `heartbeat` if available) until a line `DONE` appears. Give up after ~40 min.
+   While waiting, do nothing else: no comments claiming success, no review request.
+4. Read the final lines:
+   - `ERROR:` -> `kanban_block` with that error (kind `needs_input` for a dirty checkout or existing branch, `capability` for auth/push problems).
+   - `PR_URL=https://...` -> success, continue.
+   - `COMPARE_URL=` but no `PR_URL=` -> the PR was not created: `kanban_block` (kind `needs_input`) and give that URL.
+5. Read the generated PR description (`cat` the file named by `SUMMARY=`) and check it matches the ticket. If it clearly does not, say so in the hand-off; do not fix the code yourself.
+6. Hand off, **only now and only if you have a `PR_URL=` line**: `kanban_request_review(summary="<PR URL + files changed + what Claude reported as verified>", reviewer="code-reviewer")`.
+   Never call it before the PR exists. Do NOT complete the task and do NOT merge.
 
 ## Pitfalls
 - Never write or patch repo files with Hermes tools, and never run `git commit`/`git push` yourself; if `claude-implement` fails, report it.
 - Never force-push or push to the default branch. Never create a `main` branch.
 - Never print, copy or commit private keys, `.env` files or tokens.
 - Re-running with an existing branch name fails by design; choose a new slug and say so in the summary.
+- Never claim the work started, finished or passed unless a log line shows it.
 - Hermes provider API keys are not available in the sandbox; Claude Code there uses its own login and model (`--model`).
 
 ## Verification
