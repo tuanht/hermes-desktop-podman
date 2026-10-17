@@ -61,33 +61,41 @@ fi
 systemctl --user restart hermes-sandbox.service hermes.service
 systemctl --user --no-pager status hermes.service hermes-sandbox.service || true
 
-# coder-remote profile: SSH terminal backend pointing at the sandbox. Idempotent.
+# Profiles using the SSH sandbox as terminal backend. Idempotent.
 HX=(podman exec -u hermes -e HOME=/opt/data -e HERMES_HOME=/opt/data hermes /opt/hermes/.venv/bin/hermes)
 for _ in $(seq 30); do podman exec hermes true 2>/dev/null && break; sleep 1; done
-if ! "${HX[@]}" profile list 2>/dev/null | grep -qw coder-remote; then
-    "${HX[@]}" profile create coder-remote --clone
-fi
-PROFILE_DIR=/opt/data/profiles/coder-remote
-podman exec -u hermes hermes mkdir -p -m 700 "$PROFILE_DIR/ssh"
-podman exec -i -u hermes hermes sh -c "cat > $PROFILE_DIR/ssh/id_ed25519 && chmod 600 $PROFILE_DIR/ssh/id_ed25519" < "$KEY_DIR/id_ed25519"
-podman exec -i -u hermes hermes sh -c "
-    f=$PROFILE_DIR/.env; touch \$f
-    sed -i '/^TERMINAL_SSH_\(HOST\|USER\|PORT\|KEY\)=/d' \$f
-    cat >> \$f" <<ENVEOF
+
+setup_ssh_profile() {
+    local profile="$1" dir="/opt/data/profiles/$1" f name dest
+    if ! "${HX[@]}" profile list 2>/dev/null | grep -qw "$profile"; then
+        "${HX[@]}" profile create "$profile" --clone
+    fi
+    podman exec -u hermes hermes mkdir -p -m 700 "$dir/ssh"
+    podman exec -i -u hermes hermes sh -c "cat > $dir/ssh/id_ed25519 && chmod 600 $dir/ssh/id_ed25519" < "$KEY_DIR/id_ed25519"
+    podman exec -i -u hermes hermes sh -c "
+        f=$dir/.env; touch \$f
+        sed -i '/^TERMINAL_SSH_\(HOST\|USER\|PORT\|KEY\)=/d' \$f
+        cat >> \$f" <<ENVEOF
 TERMINAL_SSH_HOST=hermes-sandbox
 TERMINAL_SSH_USER=dev
 TERMINAL_SSH_PORT=22
-TERMINAL_SSH_KEY=$PROFILE_DIR/ssh/id_ed25519
+TERMINAL_SSH_KEY=$dir/ssh/id_ed25519
 ENVEOF
-# Project skills (skills/<name>/SKILL.md) go into the coder-remote profile only.
-for f in "$(dirname "$SRC_DIR")"/skills/*/SKILL.md; do
-    name="$(basename "$(dirname "$f")")"
-    dest="$PROFILE_DIR/skills/software-development/$name"
-    podman exec -u hermes hermes mkdir -p "$dest"
-    podman exec -i -u hermes hermes sh -c "cat > $dest/SKILL.md" < "$f"
-done
-"${HX[@]}" -p coder-remote config set terminal.backend ssh
-"${HX[@]}" -p coder-remote config set terminal.cwd /home/dev/work
+    # Project skills (skills/<profile>/<name>/SKILL.md) go into that profile only.
+    for f in "$(dirname "$SRC_DIR")/skills/$profile"/*/SKILL.md; do
+        [[ -f "$f" ]] || continue
+        name="$(basename "$(dirname "$f")")"
+        dest="$dir/skills/software-development/$name"
+        podman exec -u hermes hermes mkdir -p "$dest"
+        podman exec -i -u hermes hermes sh -c "cat > $dest/SKILL.md" < "$f"
+    done
+    "${HX[@]}" -p "$profile" config set terminal.backend ssh
+    "${HX[@]}" -p "$profile" config set terminal.cwd /home/dev/work
+}
+
+setup_ssh_profile coder-remote
+# Reviewer: picks tasks in the Kanban review column and runs Claude Code in the sandbox.
+setup_ssh_profile coder-reviewer
 # Local LLM: host Ollama (listens on 0.0.0.0:11434) reached via host.containers.internal.
 # qwen3.5:9b (Q4_K_M) fits fully in 16GB VRAM at the full 262144 context (~11GB, 100% GPU).
 # Pull it first on the host: ollama pull qwen3.5:9b

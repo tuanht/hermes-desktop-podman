@@ -11,7 +11,7 @@ that start at boot without a login. One container runs the gateway and the dashb
 - `quadlet/hermes.env.example` — secret template
 - `quadlet/hermes-sandbox.{container,volume}`, `quadlet/hermes.network` — Ubuntu dev sandbox for the `coder-remote` profile, and the shared network
 - `sandbox/` — Containerfile (Ubuntu 24.04: sshd, git, Claude Code, Node 22, Python, Go, build tools)
-- `skills/<name>/SKILL.md` — project skills, installed into the `coder-remote` profile only (e.g. `tuanht-blog`)
+- `skills/<profile>/<name>/SKILL.md` — project skills, installed into that profile only (`coder-remote/tuanht-blog`, `coder-reviewer/blog-review`)
 - `install.sh` — installs units, creates the secret file once, runs first-time setup, starts the service
 
 ## Install
@@ -107,10 +107,32 @@ Git pushes keep using the SSH deploy key; the token is only for `gh` API calls (
 Rotate by generating a new token and rerunning the login command; revoke it on GitHub to cut access.
 The token is readable by anything running as `dev` in the sandbox, which is why it is scoped to a single repo.
 
+### Reviewer profile (`coder-reviewer`)
+
+Same SSH sandbox and key as `coder-remote`, own skill `blog-review`. Flow: a ticket lands in the Kanban
+**review** column assigned to `coder-reviewer` (`kanban.review_dispatch: true`); the gateway dispatcher
+starts the worker, which runs a read-only `claude -p` review in the sandbox, comments on the ticket and the PR
+(`gh pr comment`, never approve/merge), then ends with `kanban_complete` or `kanban_request_changes`.
+An implementer can hand over with `hermes kanban request-review <id> --reviewer coder-reviewer`.
+
+```bash
+hermes kanban assign <id> coder-reviewer                       # or drag to Review and assign in the dashboard
+```
+
+**Which model?** There are two separate models. Kanban `--model/--provider` (and `kanban set-model <id> <model>`)
+pins the *Hermes worker* (the coordinator). The *Claude Code* review model defaults to `sonnet` and is chosen by a
+`claude-model: opus` line in the ticket body (aliases `sonnet`, `opus`, `haiku`, or a full model id); the skill passes it as
+`claude --model`. Optional `focus: security` steers the review. The reviewer's Hermes model is inherited from the
+default profile; change it with `hermes -p coder-reviewer config set model.default <model>`.
+
+```bash
+hermes kanban create "Review PR 12" --assignee coder-reviewer --skill blog-review --body $'PR: https://github.com/tuanht/tuanht-blog/pull/12\nclaude-model: opus\nfocus: accessibility'
+```
+
 ### Skills and Kanban tasks
 
-`skills/tuanht-blog/SKILL.md` holds the blog workflow (clone/pull, branch, verify, push). `install.sh`
-copies every `skills/*/SKILL.md` into `/opt/data/profiles/coder-remote/skills/software-development/`.
+`skills/coder-remote/tuanht-blog/SKILL.md` holds the blog workflow (clone/pull, branch, verify, push).
+`install.sh` copies `skills/<profile>/*/SKILL.md` into `/opt/data/profiles/<profile>/skills/software-development/`.
 Edit the file in this repo and rerun `./install.sh` (or `/reload-skills`). Tasks then stay short:
 
 ```bash
