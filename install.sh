@@ -66,7 +66,7 @@ HX=(podman exec -u hermes -e HOME=/opt/data -e HERMES_HOME=/opt/data hermes /opt
 for _ in $(seq 30); do podman exec hermes true 2>/dev/null && break; sleep 1; done
 
 setup_ssh_profile() {
-    local profile="$1" dir="/opt/data/profiles/$1" f name dest
+    local profile="$1" desc="$2" dir="/opt/data/profiles/$1" f name dest
     if ! "${HX[@]}" profile list 2>/dev/null | grep -qw "$profile"; then
         "${HX[@]}" profile create "$profile" --clone
     fi
@@ -89,13 +89,18 @@ ENVEOF
         podman exec -u hermes hermes mkdir -p "$dest"
         podman exec -i -u hermes hermes sh -c "cat > $dest/SKILL.md" < "$f"
     done
+    "${HX[@]}" profile describe "$profile" --text "$desc"
     "${HX[@]}" -p "$profile" config set terminal.backend ssh
     "${HX[@]}" -p "$profile" config set terminal.cwd /home/dev/work
+    # Default per-command timeout is 60s in .env; raise it so slow git/npm/claude calls are not killed.
+    "${HX[@]}" -p "$profile" config set terminal.timeout 600
 }
 
-setup_ssh_profile coder-remote
+setup_ssh_profile coder-remote "Implements code changes in the SSH dev sandbox."
 # Reviewer: picks tasks in the Kanban review column and runs Claude Code in the sandbox.
-setup_ssh_profile coder-reviewer
+setup_ssh_profile coder-reviewer "Reviews code and pull requests using Claude Code in the SSH dev sandbox."
+# Coordinator model only; the review itself runs in Claude Code (sonnet by default, per-ticket override).
+"${HX[@]}" -p coder-reviewer config set model.default grok-4.6
 # Local LLM: host Ollama (listens on 0.0.0.0:11434) reached via host.containers.internal.
 # qwen3.5:9b (Q4_K_M) fits fully in 16GB VRAM at the full 262144 context (~11GB, 100% GPU).
 # Pull it first on the host: ollama pull qwen3.5:9b

@@ -18,43 +18,33 @@ Hermes itself only coordinates; Claude Code does the review.
 ## When to Use
 A task in the Kanban `review` column (or assigned to this profile) that points at a tuanht-blog PR or branch.
 
-## Inputs (from the task body/context; ask via `kanban_block` kind `needs_input` if missing)
-- PR number/URL or branch name. Repo: `tuanht/tuanht-blog`, checkout: `/home/dev/work/tuanht-blog`.
-- Optional line `claude-model: <alias>` in the task body. Default is `sonnet`. Use `opus` for deep reviews.
-  This is the Claude Code model, separate from the Hermes worker model that Kanban `--model` pins.
-- Optional `focus:` line (e.g. security, accessibility, performance) to steer the review.
+## Inputs (from the task body/context; if missing, `kanban_block` with kind `needs_input`)
+- PR URL, `owner/repo#N`, or just `N` (means `tuanht/tuanht-blog`). Works for any repo the sandbox can read.
+- Optional `claude-model: <alias>` line. Default `sonnet`; use `opus` for deep reviews. This is the Claude Code
+  model, separate from the Hermes worker model that Kanban `--model` pins.
+- Optional `focus: <text>` line (security, accessibility, ...).
+- Optional `no-post: true` line to skip the PR comment, `build: true` to run the repo's build/lint (see Pitfalls).
 
 ## Procedure
-1. Prepare the repo: `cd /home/dev/work/tuanht-blog && git status --short` (stop if dirty), `git fetch origin --prune`.
-   If missing, clone `git@github.com:tuanht/tuanht-blog.git` first.
-2. Check out the PR head: `gh pr checkout <n>` when `gh auth status` is OK, else `git checkout <branch>`.
-   Find the base with `gh pr view <n> --json baseRefName -q .baseRefName` or the repo's default branch.
-3. Run the build/lint scripts the repo documents, and keep the results for the report.
-4. Run a read-only Claude Code review (replace `$M` with the model alias, `$BASE` with the base branch):
-
-   ```bash
-   claude -p --model "$M" --permission-mode plan \
-     --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)" \
-     "Review the changes in 'git diff origin/$BASE...HEAD' for correctness, regressions, security, accessibility, readability and test/build impact. Task focus: <focus or none>. Output: 1) verdict APPROVE or CHANGES_REQUESTED, 2) blocking issues with file:line, 3) non-blocking suggestions, 4) what you checked. Do not modify files." \
-     > /tmp/review.md
-   ```
-
-   Use a generous terminal timeout; long reviews are normal. If Claude Code is not logged in, block the task
-   with kind `capability` and say to run `claude` once in the sandbox.
-5. Read `/tmp/review.md`. Sanity-check blocking claims against the code yourself; drop anything you cannot confirm.
-6. Post the findings:
-   - Kanban: `kanban_comment` with the verdict, blocking issues, suggestions, build/lint results, and the model used.
-   - Pull request: `gh pr comment <n> --body-file /tmp/review.md` (comments only).
-7. Finish:
-   - No blocking issues: `kanban_complete` with a short summary (verdict, model used, PR link).
-   - Blocking issues: `kanban_request_changes(reason=...)` listing them concisely.
+All the mechanics live in the sandbox script `blog-review`, so do not reimplement them by hand.
+1. Start it in the background (a review takes minutes, longer than one terminal call):
+   `mkdir -p ~/work/.reviews && nohup blog-review "<PR>" --model <alias> --focus "<text>" [--no-post] [--build] > ~/work/.reviews/run-$$.out 2>&1 &`
+   Note the output file path.
+2. Poll with `tail -n 5 <file>` every 20-30 s (use `heartbeat` if the tool exists) until a line `DONE` appears. Give up after ~25 min.
+3. Read the final lines: `VERDICT=`, `REPORT=<path>`, `POSTED=yes|no`. Read the report with `cat <REPORT>`.
+4. Sanity-check each blocking item against the code (`git -C <checkout> show`); drop what you cannot confirm.
+5. `kanban_comment` on the ticket: verdict, blocking issues, suggestions, model used, whether the PR comment was posted.
+6. Finish: `VERDICT=APPROVE` -> `kanban_complete` (short summary + PR link). `CHANGES_REQUESTED` ->
+   `kanban_request_changes(reason=...)`. `UNKNOWN` or an `ERROR:` line -> `kanban_block` with the error
+   (kind `capability` if Claude is not logged in or the repo is unreadable).
 
 ## Pitfalls
-- Review is read-only. Never edit files, commit, push, merge, close the PR or run `gh pr review --approve`/`--request-changes`; the human decides.
+- Review is read-only. Never edit files, commit, push, merge, close the PR or run `gh pr review --approve`/`--request-changes`; the human decides. The script only posts a plain PR comment.
+- Build/lint is off by default: PR code is untrusted and install hooks would run next to the sandbox's GitHub key and token. Enable `--build` only for PRs from trusted authors; the script uses `npm ci --ignore-scripts`.
 - Never print or post tokens, keys or `.env` contents found in the repo; flag them as a blocking finding instead.
-- Do not use `--dangerously-skip-permissions`. Keep the allow-list above.
-- If `gh` is not authenticated, skip the PR comment and say so in the Kanban comment.
+- Do not call `claude` directly or with `--dangerously-skip-permissions`; the script keeps a read-only allow-list.
+- `POSTED=no` just means the token could not comment (e.g. the repo is outside its scope); report it, do not retry with other credentials.
 
 ## Verification
-The Kanban ticket has a findings comment, the PR has the same comment (when `gh` works), and the task ended with
-`kanban_complete` or `kanban_request_changes`. `git status` in the checkout is clean.
+The ticket has a findings comment, the task ended with `kanban_complete`, `kanban_request_changes` or `kanban_block`,
+and the report path was quoted in the comment.

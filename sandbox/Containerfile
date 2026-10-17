@@ -29,7 +29,8 @@ RUN userdel -r ubuntu 2>/dev/null || true \
 # Key-only auth; keys come from the bind-mounted /etc/ssh/authorized_keys/dev.
 COPY sshd_config /etc/ssh/sshd_config.d/10-hermes.conf
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod 0755 /usr/local/bin/entrypoint.sh
+COPY blog-review /usr/local/bin/blog-review
+RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/blog-review
 
 EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

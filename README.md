@@ -113,6 +113,20 @@ Same SSH sandbox and key as `coder-remote`, own skill `blog-review`. Flow: a tic
 **review** column assigned to `coder-reviewer` (`kanban.review_dispatch: true`); the gateway dispatcher
 starts the worker, which runs a read-only `claude -p` review in the sandbox, comments on the ticket and the PR
 (`gh pr comment`, never approve/merge), then ends with `kanban_complete` or `kanban_request_changes`.
+The mechanics live in `sandbox/blog-review` (installed as `/usr/local/bin/blog-review` in the image): it clones or
+updates the repo, checks out the PR head, runs a read-only `claude -p` (stdin prompt, plan mode, git-read allow-list),
+writes a report to `~/work/.reviews/`, optionally posts a PR comment, and ends with `VERDICT=`, `REPORT=`, `POSTED=`, `DONE`.
+Build/lint is opt-in (`--build`) because PR install hooks would run next to the sandbox's GitHub credentials.
+Try it by hand (any readable repo; `--no-post` skips the comment):
+
+```bash
+podman exec -u dev hermes-sandbox blog-review https://github.com/OWNER/REPO/pull/N --model sonnet --no-post
+```
+
+`terminal.timeout` is 600 s for both profiles (the cloned default was 60 s); the skill still runs the script in the
+background and polls, since a review takes minutes. The token only covers repos you selected, so commenting on
+other repos reports `POSTED=no`.
+
 An implementer can hand over with `hermes kanban request-review <id> --reviewer coder-reviewer`.
 
 ```bash
