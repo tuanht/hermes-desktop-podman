@@ -1,0 +1,41 @@
+# hermes.container
+# Rootless Podman Quadlet for the official Hermes Agent image.
+# Installed to ~/.config/containers/systemd/ by install.sh.
+# Generated unit: hermes.service (starts at boot via linger, no login needed).
+# Docs: https://hermes-agent.nousresearch.com/docs/user-guide/docker
+#
+# Runs the gateway and the dashboard together in one container (s6-overlay supervised).
+# Never run a second gateway against the same data volume.
+#
+# Access (loopback only):
+#   Gateway API  http://127.0.0.1:8642   (health endpoint; OpenAI-compatible API if enabled)
+#   Dashboard    http://127.0.0.1:9119   (login: HERMES_DASHBOARD_BASIC_AUTH_USERNAME / _PASSWORD)
+
+[Unit]
+Description=Hermes Agent (gateway + dashboard)
+Documentation=https://hermes-agent.nousresearch.com/docs/user-guide/docker
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=hermes
+Image=docker.io/nousresearch/hermes-agent:latest
+AutoUpdate=registry
+Exec=gateway run
+# Browser tools (Playwright) need shared memory.
+ShmSize=1g
+
+Environment=HERMES_DASHBOARD=1
+EnvironmentFile=%h/.config/hermes/hermes.env
+
+PublishPort=127.0.0.1:8642:8642
+PublishPort=127.0.0.1:9119:9119
+
+Volume=hermes.volume:/opt/data:Z
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

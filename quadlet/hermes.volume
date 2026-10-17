@@ -1,0 +1,6 @@
+# hermes.volume
+# Named volume for Hermes state (.env, config.yaml, sessions, memories, skills, logs).
+# Generated unit: hermes-volume.service. Mounted at /opt/data in the container.
+
+[Volume]
+VolumeName=hermes-data
