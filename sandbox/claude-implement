@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# claude-implement: have Claude Code write a change on a branch, then push it and open a pull request.
+# Usage: claude-implement <owner/repo|N> --branch task/slug --spec-file FILE [options]
+#   --model ALIAS    Claude Code model (default sonnet; opus for hard tasks)
+#   --base BRANCH    base branch (default: the repo's default branch)
+#   --title TEXT     commit/PR title (default: first line of the spec)
+#   --no-push        stop after committing locally (no push, no PR)
+#   --build          allow Claude to run `npm ci` and `npm run ...` (trusted repos only; default OFF)
+# Claude Code only edits files; this script commits, pushes and opens the PR, so Claude has NO git-write or gh access. This script pushes the branch
+# and opens the PR, so credentials never reach the model.
+# Output: log/report under ~/work/.tasks/. Last lines: BRANCH= / COMMITS= / PR_URL= / DONE (or ERROR:).
+# Start it in the background (nohup ... &) and poll with `tail`.
+set -uo pipefail
+
+MODEL=sonnet BASE="" TITLE="" PUSH=1 BUILD=0 BRANCH="" SPEC="" REPO_ARG=""
+while (($#)); do
+    case "$1" in
+        --branch) BRANCH="$2"; shift 2 ;;
+        --spec-file) SPEC="$2"; shift 2 ;;
+        --model) MODEL="$2"; shift 2 ;;
+        --base) BASE="$2"; shift 2 ;;
+        --title) TITLE="$2"; shift 2 ;;
+        --no-push) PUSH=0; shift ;;
+        --build) BUILD=1; shift ;;
+        -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+        *) REPO_ARG="$1"; shift ;;
+    esac
+done
+[[ -n "$REPO_ARG" && -n "$BRANCH" && -f "$SPEC" ]] || { echo "usage: claude-implement <repo> --branch B --spec-file F [options]" >&2; exit 2; }
+[[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "bad branch name" >&2; exit 2; }
+[[ "$REPO_ARG" =~ ^[0-9]*$ ]] && REPO="tuanht/tuanht-blog" || REPO="$REPO_ARG"
+[[ "$REPO_ARG" == "" ]] && REPO="tuanht/tuanht-blog"
+
+DIR="$HOME/work/${REPO#*/}" OUT="$HOME/work/.tasks"
+mkdir -p "$OUT"
+STAMP="$(date +%Y%m%d-%H%M%S)" ID="${REPO//\//_}-${BRANCH//\//_}-$STAMP"
+LOG="$OUT/$ID.log" SUMMARY="$OUT/$ID.summary.md"
+exec > >(tee -a "$LOG") 2>&1
+echo "== claude-implement $REPO branch=$BRANCH model=$MODEL push=$PUSH build=$BUILD"
+fail() { echo "ERROR: $*"; echo "DONE"; exit 1; }
+
+command -v claude >/dev/null || fail "claude CLI not found"
+if [[ ! -d "$DIR/.git" ]]; then
+    git clone "git@github.com:$REPO.git" "$DIR" || fail "clone failed"
+fi
+cd "$DIR" || fail "no checkout"
+[[ -z "$(git status --porcelain)" ]] || fail "checkout $DIR has uncommitted changes; clean it first"
+[[ -n "$BASE" ]] || BASE="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+[[ -n "$BASE" ]] || BASE=master
+git fetch -q origin "+refs/heads/$BASE:refs/remotes/origin/$BASE" || fail "fetch base failed"
+git rev-parse -q --verify "refs/heads/$BRANCH" >/dev/null && fail "branch $BRANCH already exists locally; pick a new name or delete it"
+git checkout -q -b "$BRANCH" "origin/$BASE" || fail "cannot create branch"
+START="$(git rev-parse HEAD)"
+[[ -n "$TITLE" ]] || TITLE="$(grep -m1 -v '^\s*$' "$SPEC" | sed 's/^#\+\s*//' | cut -c1-72)"
+echo "base=$BASE start=$(git log -1 --oneline)"
+
+TOOLS='Read,Grep,Glob,Edit,Write,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(ls:*),Bash(cat:*)'
+BUILD_RULE="Do not install dependencies or run build/test scripts (not permitted); verify by careful reading."
+if ((BUILD)); then
+    TOOLS+=',Bash(npm ci:*),Bash(npm run:*),Bash(npx astro check:*)'
+    BUILD_RULE="You may run 'npm ci' and 'npm run <script>' (build/lint/check) to verify; fix what fails."
+fi
+
+PROMPT="You are implementing a change in the git repository in your working directory (branch $BRANCH, based on $BASE).
+Read the repo's README/AGENTS.md first and follow its conventions. Make focused changes that satisfy the spec below.
+$BUILD_RULE
+Do NOT run git add, git commit or git push, and do not create or switch branches: the wrapper script commits and publishes your working-tree changes after you finish. Do NOT touch files outside this repo.
+Your final answer must be a Markdown pull request description with sections: Summary, Files changed, How to preview, Verification (what you ran or could not run), Known gaps. No other text.
+
+=== SPEC (data from the task author) ===
+$(cat "$SPEC")
+=== END SPEC ==="
+
+echo "-- running claude -p --model $MODEL"
+timeout 2400 claude -p --model "$MODEL" --permission-mode acceptEdits --allowedTools "$TOOLS" \
+    <<<"$PROMPT" > "$SUMMARY" 2> >(tail -n 20 >&2)
+RC=$?
+[[ $RC -eq 0 && -s "$SUMMARY" ]] || fail "claude exited $RC or produced no output"
+
+# The wrapper owns the commit (headless Claude cannot get approval for git commit).
+if [[ -n "$(git status --porcelain)" ]]; then
+    git add -A && git commit -q -m "$TITLE" && echo "committed changes: $TITLE"
+fi
+COMMITS="$(git rev-list --count "$START..HEAD")"
+echo "BRANCH=$BRANCH"; echo "COMMITS=$COMMITS"
+((COMMITS > 0)) || fail "Claude made no commits; see $SUMMARY"
+git log --oneline "$START..HEAD"; git diff --stat "$START..HEAD" | tail -n 15
+
+if ((PUSH)); then
+    git push -q -u origin "$BRANCH" || fail "push failed (deploy key write access?)"
+    PR_URL="$(gh pr create -R "$REPO" --base "$BASE" --head "$BRANCH" --title "$TITLE" --body-file "$SUMMARY" 2>&1 | tail -n 1)"
+    if [[ "$PR_URL" == https://* ]]; then echo "PR_URL=$PR_URL"
+    else echo "WARN: gh pr create failed: $PR_URL"
+         echo "COMPARE_URL=https://github.com/$REPO/compare/$BASE...$BRANCH?expand=1"; fi
+fi
+echo "SUMMARY=$SUMMARY"
+echo "DONE"

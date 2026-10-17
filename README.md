@@ -63,7 +63,8 @@ podman exec -it -u dev hermes-sandbox bash       # shell in the sandbox
 
 ### Local LLM (host Ollama)
 
-The `coder-remote` profile uses the Ollama server on the host (`OLLAMA_HOST=0.0.0.0:11434`)
+The `coder-remote` profile's *coordinator* model is local; it does not write code (Claude Code does, see
+"Who writes the code" below). It uses the Ollama server on the host (`OLLAMA_HOST=0.0.0.0:11434`)
 through `http://host.containers.internal:11434/v1` (provider `custom`). Model: `qwen3.5:9b`,
 which fits fully in 16GB VRAM at the full 262144 context (~11GB, 100% GPU). `install.sh`
 sets `model.provider/base_url/default/context_length` idempotently. To switch models, pull
@@ -145,7 +146,22 @@ hermes kanban create "Review PR 12" --assignee code-reviewer --skill pr-review -
 
 ### Skills and Kanban tasks
 
-`skills/coder-remote/tuanht-blog/SKILL.md` holds the blog workflow (clone/pull, branch, verify, push).
+### Who writes the code
+
+`coder-remote` only coordinates. Code is written by **Claude Code (Sonnet by default) inside the sandbox** through
+`sandbox/claude-implement` (installed as `/usr/local/bin/claude-implement`). The worker writes the ticket body to
+`~/work/.tasks/<id>.spec.md`, runs the script in the background and polls its log. The script creates the branch from the
+base, runs `claude -p --permission-mode acceptEdits` with an allow-list (edit/write, `git add/commit/diff/log`; `npm ci`/`npm run`
+only with `--build`), commits, then **the script itself** pushes the branch and opens the PR with `gh`. Claude Code never
+has push or `gh` access. Pin a stronger model per ticket with a `implement-model: opus` line; `build: true` allows builds.
+The worker then hands off with `kanban_request_review(..., reviewer="code-reviewer")`. Without a PR the script prints a compare URL.
+A failed run is left on its branch; reuse needs a new `--branch` name (existing branches are never overwritten).
+
+```bash
+podman exec -u dev hermes-sandbox claude-implement tuanht/tuanht-blog --branch task/x --spec-file ~/work/.tasks/x.spec.md --model sonnet --no-push
+```
+
+`skills/coder-remote/tuanht-blog/SKILL.md` holds this delegation workflow.
 `install.sh` copies `skills/<profile>/*/SKILL.md` into `/opt/data/profiles/<profile>/skills/software-development/`.
 Edit the file in this repo and rerun `./install.sh` (or `/reload-skills`). Tasks then stay short:
 

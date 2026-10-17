@@ -26,6 +26,10 @@ Exec=gateway run
 ShmSize=1g
 
 Network=hermes.network
+# File tools (write_file/patch) only write under these roots, checked by path string before the
+# terminal backend is used. Add the sandbox home so SSH-backend profiles can edit files there;
+# /home/dev does not exist in this container, so this grants no local write access.
+Environment=HERMES_WRITE_SAFE_ROOT=/opt/data:/home/dev
 Environment=HERMES_DASHBOARD=1
 EnvironmentFile=%h/.config/hermes/hermes.env
 
