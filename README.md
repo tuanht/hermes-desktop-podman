@@ -146,17 +146,30 @@ hermes kanban create "Review PR 12" --assignee code-reviewer --skill pr-review -
 ### Who writes the code
 
 `coder-remote` only coordinates (a hosted model; see "Coordinator model"). Code is written by **Claude Code (Sonnet by default) inside the sandbox** through
-`sandbox/claude-implement` (installed as `/usr/local/bin/claude-implement`). The worker writes the ticket body to
-`~/work/.tasks/<id>.spec.md`, runs the script in the background and polls its log. The script creates the branch from the
-base, runs `claude -p --permission-mode acceptEdits` with an allow-list (edit/write, `git add/commit/diff/log`; `npm ci`/`npm run`
-only with `--build`), commits, then **the script itself** pushes the branch and opens the PR with `gh`. Claude Code never
-has push or `gh` access. Pin a stronger model per ticket with a `implement-model: opus` line; `build: true` allows builds.
-The worker then hands off with `kanban_request_review(..., reviewer="code-reviewer")`. Without a PR the script prints a compare URL.
-A failed run is left on its branch; reuse needs a new `--branch` name (existing branches are never overwritten).
+`sandbox/claude-implement` (installed as `/usr/local/bin/claude-implement`). Claude Code never has push or `gh` access, and
+**nothing is pushed until the reviewer approves**:
+
+1. **New work** `--branch task/x --spec-file -`: the script creates the branch from the base, runs `claude -p --permission-mode acceptEdits`
+   (edit/write and read-only git; `npm ci`/`npm run` only with `--build`) and **commits locally**. It prints `HEAD_SHA=`; no PR exists yet.
+2. The coder hands off with `kanban_request_review` (summary lines `repo:`, `branch:`, `head_sha:`). `code-reviewer` reads that
+   **local branch** with `pr-review --branch ... --repo ...` (read-only, no PR comment, reports the reviewed `HEAD_SHA`).
+3. **Changes requested** -> the task returns to `coder-remote`, which reworks with `--branch x --continue` (or `--pr N` for an
+   already-open PR): a new local commit, no push. Then it requests review again. Loop until approved; after 5 rounds the coder blocks for a human.
+4. **Approved** -> the reviewer creates a `Publish <branch>` task (`publish: true`, `approved_sha:`) for `coder-remote` and completes the review.
+   The coder runs `--publish --expect-sha <sha>`: the script refuses unless the branch head is exactly the reviewed commit,
+   then pushes, opens the PR (or comments on the existing one) and the task completes with the PR URL.
+
+Pin a stronger model per ticket with `implement-model: opus`; `build: true` allows builds. Logs, specs and the PR text
+for the later publish live in `~/work/.tasks/`. Existing branches are never overwritten without `--continue`.
 
 ```bash
-podman exec -u dev hermes-sandbox claude-implement tuanht/tuanht-blog --branch task/x --spec-file ~/work/.tasks/x.spec.md --model sonnet --no-push
+podman exec -u dev hermes-sandbox claude-implement tuanht/tuanht-blog --branch task/x --spec-file ~/work/.tasks/x.spec.md --model sonnet
+podman exec -u dev hermes-sandbox claude-implement tuanht/tuanht-blog --branch task/x --publish --expect-sha <sha>   # after approval
 ```
+
+To give human feedback on an open PR through Kanban: reopen the ticket, add the feedback as a **comment** (naming the PR or
+branch), and reassign it to `coder-remote`; it reworks locally and the reviewer approves before the update is pushed.
+Rerunning `install.sh` restarts the containers and kills running workers, so do it when the board is idle.
 
 `skills/coder-remote/tuanht-blog/SKILL.md` holds this delegation workflow.
 `install.sh` copies `skills/<profile>/*/SKILL.md` into `/opt/data/profiles/<profile>/skills/software-development/`.
