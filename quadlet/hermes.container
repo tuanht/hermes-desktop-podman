@@ -25,6 +25,7 @@ Exec=gateway run
 # Browser tools (Playwright) need shared memory.
 ShmSize=1g
 
+Network=hermes.network
 Environment=HERMES_DASHBOARD=1
 EnvironmentFile=%h/.config/hermes/hermes.env
 

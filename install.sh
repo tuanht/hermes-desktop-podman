@@ -30,8 +30,20 @@ rm -f "$UNIT_DIR/hermes-desktop.container"
 
 podman pull "$IMAGE"
 
-install -m 0644 "$SRC_DIR/hermes.volume" "$UNIT_DIR/hermes.volume"
-install -m 0644 "$SRC_DIR/hermes.container" "$UNIT_DIR/hermes.container"
+# SSH key pair for the coder-remote profile; the public half is mounted into the sandbox.
+KEY_DIR="$ENV_DIR/coder-remote"
+mkdir -p "$KEY_DIR"
+if [[ ! -f "$KEY_DIR/id_ed25519" ]]; then
+    ssh-keygen -q -t ed25519 -N '' -C hermes-coder-remote -f "$KEY_DIR/id_ed25519"
+fi
+install -m 0644 "$KEY_DIR/id_ed25519.pub" "$KEY_DIR/authorized_keys"
+
+podman build -t localhost/hermes-sandbox:latest "$(dirname "$SRC_DIR")/sandbox"
+
+for u in hermes.volume hermes.container hermes.network \
+         hermes-sandbox.volume hermes-sandbox.container; do
+    install -m 0644 "$SRC_DIR/$u" "$UNIT_DIR/$u"
+done
 
 # Keep user services running after boot without an interactive login.
 loginctl enable-linger "$USER"
@@ -46,5 +58,26 @@ if ! podman volume exists hermes-data; then
 fi
 
 # Quadlet units are generated; boot start comes from [Install] WantedBy, so no 'enable'.
-systemctl --user restart hermes.service
-systemctl --user --no-pager status hermes.service || true
+systemctl --user restart hermes-sandbox.service hermes.service
+systemctl --user --no-pager status hermes.service hermes-sandbox.service || true
+
+# coder-remote profile: SSH terminal backend pointing at the sandbox. Idempotent.
+HX=(podman exec -u hermes -e HOME=/opt/data -e HERMES_HOME=/opt/data hermes /opt/hermes/.venv/bin/hermes)
+for _ in $(seq 30); do podman exec hermes true 2>/dev/null && break; sleep 1; done
+if ! "${HX[@]}" profile list 2>/dev/null | grep -qw coder-remote; then
+    "${HX[@]}" profile create coder-remote --clone
+fi
+PROFILE_DIR=/opt/data/profiles/coder-remote
+podman exec -u hermes hermes mkdir -p -m 700 "$PROFILE_DIR/ssh"
+podman exec -i -u hermes hermes sh -c "cat > $PROFILE_DIR/ssh/id_ed25519 && chmod 600 $PROFILE_DIR/ssh/id_ed25519" < "$KEY_DIR/id_ed25519"
+podman exec -i -u hermes hermes sh -c "
+    f=$PROFILE_DIR/.env; touch \$f
+    sed -i '/^TERMINAL_SSH_\(HOST\|USER\|PORT\|KEY\)=/d' \$f
+    cat >> \$f" <<ENVEOF
+TERMINAL_SSH_HOST=hermes-sandbox
+TERMINAL_SSH_USER=dev
+TERMINAL_SSH_PORT=22
+TERMINAL_SSH_KEY=$PROFILE_DIR/ssh/id_ed25519
+ENVEOF
+"${HX[@]}" -p coder-remote config set terminal.backend ssh
+"${HX[@]}" -p coder-remote config set terminal.cwd /home/dev/work

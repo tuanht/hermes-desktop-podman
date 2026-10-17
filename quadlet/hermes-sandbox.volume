@@ -1,0 +1,6 @@
+# hermes-sandbox.volume
+# Persists /home/dev (repos, Claude Code login, tool caches) and sshd host keys.
+# Generated unit: hermes-sandbox-volume.service.
+
+[Volume]
+VolumeName=hermes-sandbox-home

@@ -1,0 +1,6 @@
+# hermes.network
+# User-defined network so the hermes container can reach hermes-sandbox by name (DNS enabled).
+# Generated unit: hermes-network.service.
+
+[Network]
+NetworkName=hermes
