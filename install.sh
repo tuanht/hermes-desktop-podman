@@ -88,3 +88,10 @@ for f in "$(dirname "$SRC_DIR")"/skills/*/SKILL.md; do
 done
 "${HX[@]}" -p coder-remote config set terminal.backend ssh
 "${HX[@]}" -p coder-remote config set terminal.cwd /home/dev/work
+# Local LLM: host Ollama (listens on 0.0.0.0:11434) reached via host.containers.internal.
+# qwen3.5:9b (Q4_K_M) fits fully in 16GB VRAM at the full 262144 context (~11GB, 100% GPU).
+# Pull it first on the host: ollama pull qwen3.5:9b
+"${HX[@]}" -p coder-remote config set model.provider custom
+"${HX[@]}" -p coder-remote config set model.base_url http://host.containers.internal:11434/v1
+"${HX[@]}" -p coder-remote config set model.default qwen3.5:9b
+"${HX[@]}" -p coder-remote config set model.context_length 262144

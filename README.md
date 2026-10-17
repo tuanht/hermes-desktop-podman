@@ -61,6 +61,16 @@ podman exec -it -u dev hermes-sandbox claude     # one-time Claude Code login (k
 podman exec -it -u dev hermes-sandbox bash       # shell in the sandbox
 ```
 
+### Local LLM (host Ollama)
+
+The `coder-remote` profile uses the Ollama server on the host (`OLLAMA_HOST=0.0.0.0:11434`)
+through `http://host.containers.internal:11434/v1` (provider `custom`). Model: `qwen3.5:9b`,
+which fits fully in 16GB VRAM at the full 262144 context (~11GB, 100% GPU). `install.sh`
+sets `model.provider/base_url/default/context_length` idempotently. To switch models, pull
+one on the host (`ollama pull <name>`) and run
+`hermes -p coder-remote config set model.default <name>` inside the container.
+Larger models (e.g. `qwen3-coder:30b`, 18.5GB) spill to CPU at max context.
+
 ### GitHub access from the sandbox
 
 The sandbox pushes with its own key, kept in the `hermes-sandbox-home` volume (not created by `install.sh`).
@@ -75,6 +85,27 @@ Add it on GitHub as a **deploy key with write access** on each repo (Settings �
 account SSH key (broader access). Then check with `podman exec -u dev hermes-sandbox ssh -T git@github.com`.
 One-time sandbox config: `~/.ssh/config` with `Host github.com`, `IdentityFile ~/.ssh/id_ed25519_github`,
 `IdentitiesOnly yes`; `ssh-keyscan github.com >> ~/.ssh/known_hosts`; and `git config --global user.name/user.email`.
+
+### Opening pull requests with `gh`
+
+A deploy key can push branches but cannot call the GitHub API, so PRs need a token. The sandbox image
+ships the GitHub CLI (`gh`); give it a **fine-grained personal access token** limited to the one repo.
+
+1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token.
+2. Resource owner: your account. Expiration: short (e.g. 30–90 days).
+3. Repository access: **Only select repositories** → `tuanht-blog`.
+4. Repository permissions: **Pull requests: Read and write**, **Contents: Read and write** (`gh` reads repo metadata with Metadata, which is added automatically). Leave everything else at *No access*. No account permissions.
+5. Generate, copy the token (shown once), then store it in the sandbox. Paste it when prompted; it is kept in the `hermes-sandbox-home` volume (`~/.config/gh/hosts.yml`), never in this repo:
+
+```bash
+podman exec -it -u dev hermes-sandbox gh auth login --hostname github.com --git-protocol ssh --with-token
+podman exec -u dev hermes-sandbox gh auth status
+podman exec -u dev hermes-sandbox gh pr list -R tuanht/tuanht-blog   # sanity check
+```
+
+Git pushes keep using the SSH deploy key; the token is only for `gh` API calls (`gh pr create`, `gh pr comment`).
+Rotate by generating a new token and rerunning the login command; revoke it on GitHub to cut access.
+The token is readable by anything running as `dev` in the sandbox, which is why it is scoped to a single repo.
 
 ### Skills and Kanban tasks
 
