@@ -98,9 +98,9 @@ ENVEOF
 
 setup_ssh_profile coder-remote "Implements code changes in the SSH dev sandbox."
 # Reviewer: picks tasks in the Kanban review column and runs Claude Code in the sandbox.
-setup_ssh_profile coder-reviewer "Reviews code and pull requests using Claude Code in the SSH dev sandbox."
+setup_ssh_profile code-reviewer "Reviews code and pull requests using Claude Code in the SSH dev sandbox."
 # Coordinator model only; the review itself runs in Claude Code (sonnet by default, per-ticket override).
-"${HX[@]}" -p coder-reviewer config set model.default grok-4.6
+"${HX[@]}" -p code-reviewer config set model.default grok-4.6
 # Local LLM: host Ollama (listens on 0.0.0.0:11434) reached via host.containers.internal.
 # qwen3.5:9b (Q4_K_M) fits fully in 16GB VRAM at the full 262144 context (~11GB, 100% GPU).
 # Pull it first on the host: ollama pull qwen3.5:9b
