@@ -101,10 +101,9 @@ setup_ssh_profile coder-remote "Implements code changes in the SSH dev sandbox."
 setup_ssh_profile code-reviewer "Reviews code and pull requests using Claude Code in the SSH dev sandbox."
 # Coordinator model only; the review itself runs in Claude Code (sonnet by default, per-ticket override).
 "${HX[@]}" -p code-reviewer config set model.default grok-4.6
-# Local LLM: host Ollama (listens on 0.0.0.0:11434) reached via host.containers.internal.
-# qwen3.5:9b (Q4_K_M) fits fully in 16GB VRAM at the full 262144 context (~11GB, 100% GPU).
-# Pull it first on the host: ollama pull qwen3.5:9b
-"${HX[@]}" -p coder-remote config set model.provider custom
-"${HX[@]}" -p coder-remote config set model.base_url http://host.containers.internal:11434/v1
-"${HX[@]}" -p coder-remote config set model.default qwen3.5:9b
-"${HX[@]}" -p coder-remote config set model.context_length 262144
+# Coordinator model only; Claude Code in the sandbox writes the code. A small local model
+# (qwen3.5:9b) ignored the skill, pushed the wrong branch and opened a PR, so use a hosted model.
+"${HX[@]}" -p coder-remote config set model.provider xai-oauth
+"${HX[@]}" -p coder-remote config set model.base_url https://api.x.ai/v1
+"${HX[@]}" -p coder-remote config set model.default grok-4.6
+"${HX[@]}" -p coder-remote config unset model.context_length

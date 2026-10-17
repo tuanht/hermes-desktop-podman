@@ -61,16 +61,13 @@ podman exec -it -u dev hermes-sandbox claude     # one-time Claude Code login (k
 podman exec -it -u dev hermes-sandbox bash       # shell in the sandbox
 ```
 
-### Local LLM (host Ollama)
+### Coordinator model
 
-The `coder-remote` profile's *coordinator* model is local; it does not write code (Claude Code does, see
-"Who writes the code" below). It uses the Ollama server on the host (`OLLAMA_HOST=0.0.0.0:11434`)
-through `http://host.containers.internal:11434/v1` (provider `custom`). Model: `qwen3.5:9b`,
-which fits fully in 16GB VRAM at the full 262144 context (~11GB, 100% GPU). `install.sh`
-sets `model.provider/base_url/default/context_length` idempotently. To switch models, pull
-one on the host (`ollama pull <name>`) and run
-`hermes -p coder-remote config set model.default <name>` inside the container.
-Larger models (e.g. `qwen3-coder:30b`, 18.5GB) spill to CPU at max context.
+`coder-remote` and `code-reviewer` only coordinate (see "Who writes the code"), so both use hosted `grok-4.6`
+(provider `xai-oauth`). `install.sh` sets this idempotently. A local 9B model (Ollama `qwen3.5:9b`) was tried first and
+failed: it ignored the skill, reused an old branch, pushed it and opened a PR. Change it with
+`hermes -p coder-remote config set model.default <name>`; if you switch provider, also fix `model.base_url`
+(`hermes config unset model.base_url`) so requests do not go to the old endpoint.
 
 ### GitHub access from the sandbox
 
@@ -148,7 +145,7 @@ hermes kanban create "Review PR 12" --assignee code-reviewer --skill pr-review -
 
 ### Who writes the code
 
-`coder-remote` only coordinates. Code is written by **Claude Code (Sonnet by default) inside the sandbox** through
+`coder-remote` only coordinates (a hosted model; see "Coordinator model"). Code is written by **Claude Code (Sonnet by default) inside the sandbox** through
 `sandbox/claude-implement` (installed as `/usr/local/bin/claude-implement`). The worker writes the ticket body to
 `~/work/.tasks/<id>.spec.md`, runs the script in the background and polls its log. The script creates the branch from the
 base, runs `claude -p --permission-mode acceptEdits` with an allow-list (edit/write, `git add/commit/diff/log`; `npm ci`/`npm run`
