@@ -30,7 +30,7 @@ A task in the Kanban `review` column (or assigned to this profile) that points a
 - Optional `no-post: true` line to skip the PR comment, `build: true` to run the repo's build/lint (see Pitfalls).
 
 ## Procedure
-All the mechanics live in the sandbox script `pr-review`, so do not reimplement them by hand.
+All the mechanics live in the sandbox command `pr-review` (a Python script on `PATH`; call it by that name, never `python`/`.py` paths), so do not reimplement them by hand.
 1. Start it in the background (a review takes minutes, longer than one terminal call):
    - local branch: `mkdir -p ~/work/.reviews && nohup pr-review --branch "<branch>" --repo "<repo>" --model <alias> --focus "<text>" [--build] > ~/work/.reviews/run-$$.out 2>&1 &`
    - published PR: `... nohup pr-review "<PR>" --model <alias> --focus "<text>" [--no-post] [--build] > ... &`

@@ -111,7 +111,7 @@ Same SSH sandbox and key as `coder-remote`, own skill `pr-review`. Flow: a ticke
 **review** column assigned to `code-reviewer` (`kanban.review_dispatch: true`); the gateway dispatcher
 starts the worker, which runs a read-only `claude -p` review in the sandbox, comments on the ticket and the PR
 (`gh pr comment`, never approve/merge), then ends with `kanban_complete` or `kanban_request_changes`.
-The mechanics live in `sandbox/pr-review` (installed as `/usr/local/bin/pr-review` in the image): it clones or
+The mechanics live in `sandbox/pr_review.py` (Python, installed as the command `/usr/local/bin/pr-review` in the image): it clones or
 updates the repo, checks out the PR head, runs a read-only `claude -p` (stdin prompt, plan mode, git-read allow-list),
 writes a report to `~/work/.reviews/`, optionally posts a PR comment, and ends with `VERDICT=`, `REPORT=`, `POSTED=`, `DONE`.
 Build/lint is opt-in (`--build`) because PR install hooks would run next to the sandbox's GitHub credentials.
@@ -146,7 +146,7 @@ hermes kanban create "Review PR 12" --assignee code-reviewer --skill pr-review -
 ### Who writes the code
 
 `coder-remote` only coordinates (a hosted model; see "Coordinator model"). Code is written by **Claude Code (Sonnet by default) inside the sandbox** through
-`sandbox/claude-implement` (installed as `/usr/local/bin/claude-implement`). Claude Code never has push or `gh` access, and
+`sandbox/claude_implement.py` (Python, installed as the command `/usr/local/bin/claude-implement`; shared helpers in `sandbox/hermes_sandbox.py`). Claude Code never has push or `gh` access, and
 **nothing is pushed until the reviewer approves**:
 
 1. **New work** `--branch task/x --spec-file -`: the script creates the branch from the base, runs `claude -p --permission-mode acceptEdits`
