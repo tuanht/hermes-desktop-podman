@@ -29,8 +29,11 @@ RUN userdel -r ubuntu 2>/dev/null || true \
 # Key-only auth; keys come from the bind-mounted /etc/ssh/authorized_keys/dev.
 COPY sshd_config /etc/ssh/sshd_config.d/10-hermes.conf
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY pr-review claude-implement /usr/local/bin/
-RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/pr-review /usr/local/bin/claude-implement
+# Python helper scripts keep their command names (pr-review, claude-implement); hermes_sandbox.py is their shared module.
+COPY hermes_sandbox.py pr_review.py claude_implement.py /usr/local/lib/hermes-sandbox/
+RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/lib/hermes-sandbox/pr_review.py /usr/local/lib/hermes-sandbox/claude_implement.py \
+    && ln -s /usr/local/lib/hermes-sandbox/pr_review.py /usr/local/bin/pr-review \
+    && ln -s /usr/local/lib/hermes-sandbox/claude_implement.py /usr/local/bin/claude-implement
 
 EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

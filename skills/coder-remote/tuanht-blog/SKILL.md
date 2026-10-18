@@ -11,8 +11,8 @@ metadata:
 
 # tuanht-blog
 
-You are the coordinator. **Claude Code writes the code**, inside `hermes-sandbox`, through the script
-`claude-implement`. You do not edit repo files yourself with `write_file`/`patch`/shell redirects, and you do not
+You are the coordinator. **Claude Code writes the code**, inside `hermes-sandbox`, through the sandbox command
+`claude-implement` (a Python script on `PATH`; always call it by that name, never via `python`/`.py` paths). You do not edit repo files yourself with `write_file`/`patch`/shell redirects, and you do not
 write the implementation with your own model. The terminal backend is SSH, so terminal commands already run in
 the sandbox as user `dev`.
 
