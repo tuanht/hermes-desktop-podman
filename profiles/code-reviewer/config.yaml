@@ -1,0 +1,6 @@
+model:
+  default: grok-4.6
+terminal:
+  backend: ssh
+  cwd: /home/dev/work
+  timeout: 600
