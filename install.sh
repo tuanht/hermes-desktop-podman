@@ -71,11 +71,9 @@ setup_ssh_profile() {
     local profile="$1" dir="/opt/data/profiles/$1" src="$(dirname "$SRC_DIR")/profiles/$1" tmp="/tmp/dist-$1"
     podman exec hermes rm -rf "$tmp"
     podman cp "$src" "hermes:$tmp"
-    if "${HX[@]}" profile list 2>/dev/null | grep -qw "$profile"; then
-        "${HX[@]}" profile update "$profile" --force-config --yes
-    else
-        "${HX[@]}" profile install "$tmp" --name "$profile" --yes
-    fi
+    # --force installs over an existing profile (user data kept) and also converts profiles
+    # created before they were distributions; `profile update` would fail on those and needs the source dir kept.
+    "${HX[@]}" profile install "$tmp" --name "$profile" --force --yes
     podman exec hermes rm -rf "$tmp"
     podman exec -u hermes hermes mkdir -p -m 700 "$dir/ssh"
     podman exec -i -u hermes hermes sh -c "cat > $dir/ssh/id_ed25519 && chmod 600 $dir/ssh/id_ed25519" < "$KEY_DIR/id_ed25519"

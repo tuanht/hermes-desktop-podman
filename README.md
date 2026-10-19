@@ -172,7 +172,7 @@ branch), and reassign it to `coder-remote`; it reworks locally and the reviewer 
 Rerunning `install.sh` restarts the containers and kills running workers, so do it when the board is idle.
 
 `profiles/coder-remote/skills/software-development/tuanht-blog/SKILL.md` holds this delegation workflow.
-`install.sh` installs `profiles/<name>/` with `hermes profile install` (or `profile update --force-config` on reruns).
+`install.sh` installs `profiles/<name>/` with `hermes profile install` with `--force` (safe to rerun).
 Edit the file in this repo and rerun `./install.sh` (or `/reload-skills`). Tasks then stay short:
 
 ```bash
