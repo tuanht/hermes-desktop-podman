@@ -11,7 +11,7 @@ that start at boot without a login. One container runs the gateway and the dashb
 - `quadlet/hermes.env.example` — secret template
 - `quadlet/hermes-sandbox.{container,volume}`, `quadlet/hermes.network` — Ubuntu dev sandbox for the `coder-remote` profile, and the shared network
 - `sandbox/` — Containerfile (Ubuntu 24.04: sshd, git, Claude Code, Node 22, Python, Go, build tools)
-- `skills/<profile>/<name>/SKILL.md` — project skills, installed into that profile only (`coder-remote/tuanht-blog`, `code-reviewer/pr-review`)
+- `profiles/<name>/` — one Hermes [profile distribution](https://hermes-agent.nousresearch.com/docs/user-guide/profile-distributions) per profile (`distribution.yaml`, `config.yaml`, `skills/`); `coder-remote` and `code-reviewer`
 - `install.sh` — installs units, creates the secret file once, runs first-time setup, starts the service
 
 ## Install
@@ -121,7 +121,7 @@ Try it by hand (any readable repo; `--no-post` skips the comment):
 podman exec -u dev hermes-sandbox pr-review https://github.com/OWNER/REPO/pull/N --model sonnet --no-post
 ```
 
-`terminal.timeout` is 600 s for both profiles (the cloned default was 60 s); the skill still runs the script in the
+`terminal.timeout` is 600 s for both profiles (the default was 60 s); the skill still runs the script in the
 background and polls, since a review takes minutes. The token only covers repos you selected, so commenting on
 other repos reports `POSTED=no`.
 
@@ -171,8 +171,8 @@ To give human feedback on an open PR through Kanban: reopen the ticket, add the 
 branch), and reassign it to `coder-remote`; it reworks locally and the reviewer approves before the update is pushed.
 Rerunning `install.sh` restarts the containers and kills running workers, so do it when the board is idle.
 
-`skills/coder-remote/tuanht-blog/SKILL.md` holds this delegation workflow.
-`install.sh` copies `skills/<profile>/*/SKILL.md` into `/opt/data/profiles/<profile>/skills/software-development/`.
+`profiles/coder-remote/skills/software-development/tuanht-blog/SKILL.md` holds this delegation workflow.
+`install.sh` installs `profiles/<name>/` with `hermes profile install` (or `profile update --force-config` on reruns).
 Edit the file in this repo and rerun `./install.sh` (or `/reload-skills`). Tasks then stay short:
 
 ```bash

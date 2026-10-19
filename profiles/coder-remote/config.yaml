@@ -1,0 +1,9 @@
+model:
+  provider: xai-oauth
+  base_url: https://api.x.ai/v1
+  default: grok-4.6
+terminal:
+  backend: ssh
+  cwd: /home/dev/work
+  # Default per-command timeout is 60s; raise it so slow git/npm/claude calls are not killed.
+  timeout: 600

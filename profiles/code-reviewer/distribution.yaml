@@ -1,0 +1,3 @@
+name: code-reviewer
+version: 1.0.0
+description: Reviews code and pull requests using Claude Code in the SSH dev sandbox.

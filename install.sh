@@ -65,11 +65,18 @@ systemctl --user --no-pager status hermes.service hermes-sandbox.service || true
 HX=(podman exec -u hermes -e HOME=/opt/data -e HERMES_HOME=/opt/data hermes /opt/hermes/.venv/bin/hermes)
 for _ in $(seq 30); do podman exec hermes true 2>/dev/null && break; sleep 1; done
 
+# Profiles are Hermes distributions (profiles/<name>/distribution.yaml, config.yaml, skills/).
+# Machine-specific SSH settings stay here; the distribution carries only portable config.
 setup_ssh_profile() {
-    local profile="$1" desc="$2" dir="/opt/data/profiles/$1" f name dest
-    if ! "${HX[@]}" profile list 2>/dev/null | grep -qw "$profile"; then
-        "${HX[@]}" profile create "$profile" --clone
+    local profile="$1" dir="/opt/data/profiles/$1" src="$(dirname "$SRC_DIR")/profiles/$1" tmp="/tmp/dist-$1"
+    podman exec hermes rm -rf "$tmp"
+    podman cp "$src" "hermes:$tmp"
+    if "${HX[@]}" profile list 2>/dev/null | grep -qw "$profile"; then
+        "${HX[@]}" profile update "$profile" --force-config --yes
+    else
+        "${HX[@]}" profile install "$tmp" --name "$profile" --yes
     fi
+    podman exec hermes rm -rf "$tmp"
     podman exec -u hermes hermes mkdir -p -m 700 "$dir/ssh"
     podman exec -i -u hermes hermes sh -c "cat > $dir/ssh/id_ed25519 && chmod 600 $dir/ssh/id_ed25519" < "$KEY_DIR/id_ed25519"
     podman exec -i -u hermes hermes sh -c "
@@ -81,29 +88,7 @@ TERMINAL_SSH_USER=dev
 TERMINAL_SSH_PORT=22
 TERMINAL_SSH_KEY=$dir/ssh/id_ed25519
 ENVEOF
-    # Project skills (skills/<profile>/<name>/SKILL.md) go into that profile only.
-    for f in "$(dirname "$SRC_DIR")/skills/$profile"/*/SKILL.md; do
-        [[ -f "$f" ]] || continue
-        name="$(basename "$(dirname "$f")")"
-        dest="$dir/skills/software-development/$name"
-        podman exec -u hermes hermes mkdir -p "$dest"
-        podman exec -i -u hermes hermes sh -c "cat > $dest/SKILL.md" < "$f"
-    done
-    "${HX[@]}" profile describe "$profile" --text "$desc"
-    "${HX[@]}" -p "$profile" config set terminal.backend ssh
-    "${HX[@]}" -p "$profile" config set terminal.cwd /home/dev/work
-    # Default per-command timeout is 60s in .env; raise it so slow git/npm/claude calls are not killed.
-    "${HX[@]}" -p "$profile" config set terminal.timeout 600
 }
 
-setup_ssh_profile coder-remote "Implements code changes in the SSH dev sandbox."
-# Reviewer: picks tasks in the Kanban review column and runs Claude Code in the sandbox.
-setup_ssh_profile code-reviewer "Reviews code and pull requests using Claude Code in the SSH dev sandbox."
-# Coordinator model only; the review itself runs in Claude Code (sonnet by default, per-ticket override).
-"${HX[@]}" -p code-reviewer config set model.default grok-4.6
-# Coordinator model only; Claude Code in the sandbox writes the code. A small local model
-# (qwen3.5:9b) ignored the skill, pushed the wrong branch and opened a PR, so use a hosted model.
-"${HX[@]}" -p coder-remote config set model.provider xai-oauth
-"${HX[@]}" -p coder-remote config set model.base_url https://api.x.ai/v1
-"${HX[@]}" -p coder-remote config set model.default grok-4.6
-"${HX[@]}" -p coder-remote config unset model.context_length
+setup_ssh_profile coder-remote
+setup_ssh_profile code-reviewer
