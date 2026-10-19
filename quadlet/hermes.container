@@ -9,7 +9,7 @@
 #
 # Access (loopback only):
 #   Gateway API  http://127.0.0.1:8642   (health endpoint; OpenAI-compatible API if enabled)
-#   Dashboard    http://127.0.0.1:9119   (login: HERMES_DASHBOARD_BASIC_AUTH_USERNAME / _PASSWORD)
+#   Dashboard    http://127.0.0.1:9119 and http://100.87.160.121:9119 (Tailscale IP of this host; login: HERMES_DASHBOARD_BASIC_AUTH_USERNAME / _PASSWORD)
 
 [Unit]
 Description=Hermes Agent (gateway + dashboard)
@@ -35,6 +35,8 @@ EnvironmentFile=%h/.config/hermes/hermes.env
 
 PublishPort=127.0.0.1:8642:8642
 PublishPort=127.0.0.1:9119:9119
+# Tailscale IP of this host; if tailscaled is not up yet at boot the bind fails and Restart=always retries.
+PublishPort=100.87.160.121:9119:9119
 
 Volume=hermes.volume:/opt/data:Z
 
