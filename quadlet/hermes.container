@@ -7,6 +7,8 @@
 # Runs the gateway and the dashboard together in one container (s6-overlay supervised).
 # Never run a second gateway against the same data volume.
 #
+# Joins the hermes.pod pod, which owns the network and the published ports (see hermes.pod).
+#
 # Access (loopback only):
 #   Gateway API  http://127.0.0.1:8642   (health endpoint; OpenAI-compatible API if enabled)
 #   Dashboard    http://127.0.0.1:9119 and http://100.87.160.121:9119 (Tailscale IP of this host; login: HERMES_DASHBOARD_BASIC_AUTH_USERNAME / _PASSWORD)
@@ -25,18 +27,13 @@ Exec=gateway run
 # Browser tools (Playwright) need shared memory.
 ShmSize=1g
 
-Network=hermes.network
+Pod=hermes.pod
 # File tools (write_file/patch) only write under these roots, checked by path string before the
 # terminal backend is used. Add the sandbox home so SSH-backend profiles can edit files there;
 # /home/dev does not exist in this container, so this grants no local write access.
 Environment=HERMES_WRITE_SAFE_ROOT=/opt/data:/home/dev
 Environment=HERMES_DASHBOARD=1
 EnvironmentFile=%h/.config/hermes/hermes.env
-
-PublishPort=127.0.0.1:8642:8642
-PublishPort=127.0.0.1:9119:9119
-# Tailscale IP of this host; if tailscaled is not up yet at boot the bind fails and Restart=always retries.
-PublishPort=100.87.160.121:9119:9119
 
 Volume=hermes.volume:/opt/data:Z
 

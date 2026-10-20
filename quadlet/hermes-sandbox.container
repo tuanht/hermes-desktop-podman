@@ -1,7 +1,8 @@
 # hermes-sandbox.container
 # Ubuntu dev sandbox (sshd + Claude Code + git + toolchains) used as the SSH terminal backend
 # of the Hermes `coder-remote` profile. Image is built locally by install.sh from sandbox/.
-# Generated unit: hermes-sandbox.service. Reachable only on the `hermes` network (no published port).
+# Generated unit: hermes-sandbox.service. Joins the hermes.pod pod, so it is reachable as
+# `hermes-sandbox` on the `hermes` network and has no published port of its own.
 #
 # Claude Code login (once):  podman exec -it -u dev hermes-sandbox claude
 
@@ -12,8 +13,8 @@ After=network-online.target
 [Container]
 ContainerName=hermes-sandbox
 Image=localhost/hermes-sandbox:latest
-Network=hermes.network
-HostName=hermes-sandbox
+# A pod shares one hostname (set on the pod), so no HostName= here.
+Pod=hermes.pod
 
 Volume=hermes-sandbox.volume:/home/dev:Z
 # Persist sshd host keys so the client's known_hosts stays valid across rebuilds.

@@ -50,7 +50,7 @@ shred -u ~/hermes-migrate/* && rmdir ~/hermes-migrate   # when done, on both mac
    mkdir -p ~/.config/hermes
    install -m 600 ~/hermes-migrate/hermes.env ~/.config/hermes/hermes.env
    ```
-3. In `quadlet/hermes.container`, set the Tailscale `PublishPort=<ip>:9119:9119` line to the new machine's Tailscale IP (or remove it). A stale IP fails to bind and the service restart-loops.
+3. In `quadlet/hermes.pod`, set the Tailscale `PublishPort=<ip>:9119:9119` line to the new machine's Tailscale IP (or remove it). A stale IP fails to bind and the service restart-loops.
 4. Run `./install.sh`. It creates the volumes, installs the units and applies the profiles.
 5. Stop the services and import the data:
    ```bash

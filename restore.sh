@@ -20,7 +20,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 if ! podman volume exists hermes-data; then
-    echo "Volumes not found. Edit the PublishPort IP in quadlet/hermes.container, run ./install.sh, then rerun this script." >&2
+    echo "Volumes not found. Edit the PublishPort IP in quadlet/hermes.pod, run ./install.sh, then rerun this script." >&2
     exit 1
 fi
 

@@ -6,6 +6,7 @@ that start at boot without a login. One container runs the gateway and the dashb
 
 ## Layout
 
+- `quadlet/hermes.pod` — pod `hermes` (network, published ports); the containers join it
 - `quadlet/hermes.container` — container unit (source of truth)
 - `quadlet/hermes.volume` — named volume `hermes-data`, mounted at `/opt/data`
 - `quadlet/hermes.env.example` — secret template
@@ -49,8 +50,8 @@ Upgrade: `podman pull docker.io/nousresearch/hermes-agent:latest && systemctl --
 
 ## coder-remote profile (SSH backend)
 
-`install.sh` builds `localhost/hermes-sandbox`, runs it as `hermes-sandbox.service` on the `hermes`
-network (no published ports), and creates the Hermes profile `coder-remote` with
+`install.sh` builds `localhost/hermes-sandbox`, runs it as `hermes-sandbox.service` in the `hermes` pod
+(no published ports), and creates the Hermes profile `coder-remote` with
 `terminal.backend=ssh` pointing at `dev@hermes-sandbox`, cwd `/home/dev/work`. The key pair lives in
 `~/.config/hermes/coder-remote/`; the private key is copied into the profile at
 `/opt/data/profiles/coder-remote/ssh/`. Re-running the script is idempotent.

@@ -40,7 +40,7 @@ install -m 0644 "$KEY_DIR/id_ed25519.pub" "$KEY_DIR/authorized_keys"
 
 podman build -t localhost/hermes-sandbox:latest "$(dirname "$SRC_DIR")/sandbox"
 
-for u in hermes.volume hermes.container hermes.network \
+for u in hermes.volume hermes.container hermes.network hermes.pod \
          hermes-sandbox.volume hermes-sandbox.container; do
     install -m 0644 "$SRC_DIR/$u" "$UNIT_DIR/$u"
 done

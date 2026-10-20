@@ -1,0 +1,32 @@
+# hermes.pod
+# Pod shared by hermes and hermes-sandbox. Containers in a pod share one network namespace,
+# so the pod owns the `hermes` network and the published ports; the containers join it with Pod=.
+# Generated unit: hermes-pod.service (started before its containers, stopped after them).
+#
+# Containers in the pod reach each other on localhost. Podman DNS registers only the pod name,
+# not member container names, so AddHost maps `hermes-sandbox` (TERMINAL_SSH_HOST) to 127.0.0.1
+# in every container's /etc/hosts; sshd in the sandbox listens on 22 in the shared namespace.
+#
+# Ports (loopback, plus the Tailscale IP of this host). If tailscaled is not up yet at boot the
+# Tailscale bind fails and Restart=always retries. Set the IP to this machine's Tailscale IP.
+
+[Unit]
+Description=Hermes pod (gateway, dashboard and SSH sandbox share one network namespace)
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PodName=hermes
+Network=hermes.network
+
+PublishPort=127.0.0.1:8642:8642
+PublishPort=127.0.0.1:9119:9119
+PublishPort=100.87.160.121:9119:9119
+AddHost=hermes-sandbox:127.0.0.1
+
+[Service]
+# A failed Tailscale bind now fails the whole pod; keep retrying (the pod default is on-failure).
+Restart=always
+
+[Install]
+WantedBy=default.target
