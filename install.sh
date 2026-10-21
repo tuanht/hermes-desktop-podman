@@ -40,10 +40,22 @@ install -m 0644 "$KEY_DIR/id_ed25519.pub" "$KEY_DIR/authorized_keys"
 
 podman build -t localhost/hermes-sandbox:latest "$(dirname "$SRC_DIR")/sandbox"
 
+# Transmission MCP server image, built from its own repo (skipped if the checkout is missing).
+MCP_SRC="${TRANSMISSION_MCP_DIR:-$HOME/Projects/transmission-mcp}"
+if [[ -d "$MCP_SRC" ]]; then
+    podman build -t localhost/transmission-mcp:latest "$MCP_SRC"
+    WITH_TRANSMISSION_MCP=1
+else
+    echo "Skipping transmission-mcp: $MCP_SRC not found." >&2
+fi
+
 for u in hermes.volume hermes.container hermes.network hermes.pod \
          hermes-sandbox.volume hermes-sandbox.container; do
     install -m 0644 "$SRC_DIR/$u" "$UNIT_DIR/$u"
 done
+if [[ -n "${WITH_TRANSMISSION_MCP:-}" ]]; then
+    install -m 0644 "$SRC_DIR/transmission-mcp.container" "$UNIT_DIR/transmission-mcp.container"
+fi
 
 # Keep user services running after boot without an interactive login.
 loginctl enable-linger "$USER"
@@ -59,6 +71,7 @@ fi
 
 # Quadlet units are generated; boot start comes from [Install] WantedBy, so no 'enable'.
 systemctl --user restart hermes-sandbox.service hermes.service
+[[ -z "${WITH_TRANSMISSION_MCP:-}" ]] || systemctl --user restart transmission-mcp.service
 systemctl --user --no-pager status hermes.service hermes-sandbox.service || true
 
 # Profiles using the SSH sandbox as terminal backend. Idempotent.
@@ -90,3 +103,11 @@ ENVEOF
 
 setup_ssh_profile coder-remote
 setup_ssh_profile code-reviewer
+
+# Transmission MCP skill. The server itself is registered by hand (dashboard or config.yaml):
+#   mcp_servers: {transmission: {url: http://127.0.0.1:8650/mcp}}
+if [[ -n "${WITH_TRANSMISSION_MCP:-}" ]]; then
+    podman exec hermes rm -rf /opt/data/skills/transmission-download
+    podman cp "$(dirname "$SRC_DIR")/skills/transmission-download" hermes:/opt/data/skills/transmission-download
+    podman exec hermes chown -R hermes:hermes /opt/data/skills/transmission-download
+fi

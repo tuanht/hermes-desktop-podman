@@ -1,0 +1,24 @@
+# transmission-mcp.container
+# MCP server (streamable HTTP) that sends magnet links to the Transmission container and reports
+# download status. Image is built locally from ~/Projects/transmission-mcp (see install.sh).
+# Generated unit: transmission-mcp.service. Joins the hermes.pod pod, so Hermes reaches it at
+# http://127.0.0.1:8650/mcp and it has no published port of its own. No auth: never publish it.
+# Transmission is reached through the host's published port 9091.
+
+[Unit]
+Description=Transmission MCP server for Hermes
+After=network-online.target
+
+[Container]
+ContainerName=transmission-mcp
+Image=localhost/transmission-mcp:latest
+Pod=hermes.pod
+Environment=TRANSMISSION_URL=http://host.containers.internal:9091/transmission/rpc
+Environment=MCP_PORT=8650
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
