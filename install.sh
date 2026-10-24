@@ -49,10 +49,19 @@ else
     echo "Skipping transmission-mcp: $MCP_SRC not found." >&2
 fi
 
-for u in hermes.volume hermes.container hermes.network hermes.pod \
+for u in hermes.volume hermes.container hermes.network \
          hermes-sandbox.volume hermes-sandbox.container; do
     install -m 0644 "$SRC_DIR/$u" "$UNIT_DIR/$u"
 done
+# The Tailscale IP is host-specific and can change; resolve it now.
+TS_IP="$(tailscale ip -4 2>/dev/null | head -n1 || true)"
+if [[ -n "$TS_IP" ]]; then
+    sed "s/@TAILSCALE_IP@/$TS_IP/" "$SRC_DIR/hermes.pod" > "$UNIT_DIR/hermes.pod"
+else
+    echo "Tailscale IP not found; publishing dashboard on loopback only." >&2
+    sed '/@TAILSCALE_IP@/d' "$SRC_DIR/hermes.pod" > "$UNIT_DIR/hermes.pod"
+fi
+chmod 0644 "$UNIT_DIR/hermes.pod"
 if [[ -n "${WITH_TRANSMISSION_MCP:-}" ]]; then
     install -m 0644 "$SRC_DIR/transmission-mcp.container" "$UNIT_DIR/transmission-mcp.container"
 fi

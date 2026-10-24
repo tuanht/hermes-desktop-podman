@@ -8,12 +8,15 @@
 # in every container's /etc/hosts; sshd in the sandbox listens on 22 in the shared namespace.
 #
 # Ports (loopback, plus the Tailscale IP of this host). If tailscaled is not up yet at boot the
-# Tailscale bind fails and Restart=always retries. Set the IP to this machine's Tailscale IP.
+# Tailscale bind fails and Restart=always retries. install.sh replaces @TAILSCALE_IP@ with
+# `tailscale ip -4` (and drops the line if Tailscale is absent); rerun it if the IP changes.
 
 [Unit]
 Description=Hermes pod (gateway, dashboard and SSH sandbox share one network namespace)
 Wants=network-online.target
 After=network-online.target
+# Boot retries must not trip the start limit while tailscaled comes up.
+StartLimitIntervalSec=0
 
 [Pod]
 PodName=hermes
@@ -21,7 +24,7 @@ Network=hermes.network
 
 PublishPort=127.0.0.1:8642:8642
 PublishPort=127.0.0.1:9119:9119
-PublishPort=100.87.160.121:9119:9119
+PublishPort=@TAILSCALE_IP@:9119:9119
 AddHost=hermes-sandbox:127.0.0.1
 
 [Service]
